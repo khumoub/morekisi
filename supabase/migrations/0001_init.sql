@@ -209,7 +209,7 @@ create table payments (
 
 create view customer_balances with (security_invoker = true) as
 select c.id as customer_id, c.business_id, c.name, c.credit_limit,
-       coalesce(s.owed, 0) - coalesce(p.paid, 0) as balance,
+       (coalesce(s.owed, 0) - coalesce(p.paid, 0))::bigint as balance,
        s.oldest_unpaid
 from customers c
 left join (select customer_id, sum(total) as owed, min(created_at) as oldest_unpaid
