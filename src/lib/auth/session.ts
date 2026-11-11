@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { userClient } from "@/lib/db/user";
 import type { Role } from "@/lib/engine/types";
+import { hasRole } from "./roles";
 
 export const BUSINESS_COOKIE = "mk_business";
 
@@ -22,11 +23,7 @@ export interface Session {
   current: Membership;
 }
 
-const RANK: Record<Role, number> = { staff: 0, manager: 1, owner: 2 };
-
-export function hasRole(role: Role, atLeast: Role): boolean {
-  return RANK[role] >= RANK[atLeast];
-}
+export { hasRole } from "./roles";
 
 /** The signed-in user and their shops. Redirects to /login or /onboarding when needed. Cached per request. */
 export const getSession = cache(async (): Promise<Session> => {

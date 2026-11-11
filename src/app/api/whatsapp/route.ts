@@ -4,7 +4,9 @@ import { adminClient } from "@/lib/db/server";
 import { supabaseRepo } from "@/lib/db/supabase-repo";
 import { handleInbound } from "@/lib/engine/handle";
 import { parseWebhook } from "@/lib/whatsapp/inbound";
-import { markRead, sendMessage, type SendConfig } from "@/lib/whatsapp/outbound";
+import { markRead, sendMessage, uploadMedia, type SendConfig } from "@/lib/whatsapp/outbound";
+import { getProvider } from "@/lib/ai";
+import type { Messenger } from "@/lib/engine/types";
 import { verifySignature } from "@/lib/whatsapp/signature";
 import { tokenFor } from "@/lib/whatsapp/tokens";
 
@@ -51,13 +53,22 @@ export async function POST(req: NextRequest) {
       apiVersion: env.WHATSAPP_API_VERSION,
     });
 
+    const messengerFor = (account: { phoneNumberId: string }): Messenger => ({
+      send: async (to, msg) => sendMessage(await configFor(account.phoneNumberId), to, msg),
+      sendFile: async (to, file, caption) => {
+        const cfg = await configFor(account.phoneNumberId);
+        const uploaded = await uploadMedia(cfg, file);
+        if (!uploaded.ok) {
+          console.error("whatsapp: media upload failed", uploaded.error);
+          return { ok: false };
+        }
+        return sendMessage(cfg, to, { type: "document", id: uploaded.id, filename: file.filename, caption });
+      },
+    });
+
     for (const message of messages) {
       try {
-        const outcome = await handleInbound(
-          repo,
-          (account) => async (to, msg) => sendMessage(await configFor(account.phoneNumberId), to, msg),
-          message,
-        );
+        const outcome = await handleInbound({ repo, messengerFor, ai: getProvider() }, message);
         if (outcome !== "unknown_number" && outcome !== "duplicate") {
           await markRead(await configFor(message.phoneNumberId), message.messageId);
         }

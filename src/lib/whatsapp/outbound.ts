@@ -37,7 +37,8 @@ export type OutboundMessage =
   | { type: "text"; text: string }
   | { type: "buttons"; body: string; buttons: Button[]; header?: string; footer?: string }
   | { type: "list"; body: string; button: string; sections: ListSection[]; header?: string; footer?: string }
-  | { type: "document"; link: string; filename: string; caption?: string }
+  /** A document by public `link`, or by `id` from uploadMedia (preferred: no public URL needed). */
+  | { type: "document"; link?: string; id?: string; filename: string; caption?: string }
   | { type: "location_request"; body: string }
   | { type: "template"; name: string; language: string; components?: TemplateComponent[] };
 
@@ -128,7 +129,11 @@ export function buildPayload(to: string, msg: OutboundMessage): Record<string, u
       return {
         ...base,
         type: "document",
-        document: { link: msg.link, filename: msg.filename, ...(msg.caption && { caption: msg.caption }) },
+        document: {
+          ...(msg.id ? { id: msg.id } : { link: msg.link }),
+          filename: msg.filename,
+          ...(msg.caption && { caption: msg.caption }),
+        },
       };
 
     case "location_request":
@@ -188,4 +193,23 @@ export async function markRead(cfg: SendConfig, messageId: string): Promise<void
     headers: { Authorization: `Bearer ${cfg.accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({ messaging_product: "whatsapp", status: "read", message_id: messageId }),
   }).catch(() => undefined);
+}
+
+/** Uploads a file to WhatsApp's media store (kept by Meta for 30 days) and returns its media id. */
+export async function uploadMedia(
+  cfg: SendConfig,
+  file: { data: Buffer; filename: string; mimeType: string },
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("type", file.mimeType);
+  form.append("file", new Blob([new Uint8Array(file.data)], { type: file.mimeType }), file.filename);
+  const res = await fetch(`https://graph.facebook.com/${cfg.apiVersion}/${cfg.phoneNumberId}/media`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${cfg.accessToken}` },
+    body: form,
+  });
+  const json = (await res.json().catch(() => ({}))) as { id?: string; error?: { message?: string } };
+  if (!res.ok || !json.id) return { ok: false, error: json.error?.message ?? `HTTP ${res.status}` };
+  return { ok: true, id: json.id };
 }

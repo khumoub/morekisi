@@ -1,8 +1,9 @@
 import type { InboundMessage } from "@/lib/whatsapp/inbound";
+import type { LlmProvider } from "@/lib/ai/provider";
 import { toE164 } from "@/lib/phone";
 import { handleOffice } from "@/lib/office";
 import { handleStore } from "@/lib/store";
-import type { Context, Party, Repo, Send } from "./types";
+import type { Context, Messenger, Party, Repo, WaAccount } from "./types";
 
 export type HandleOutcome =
   | "unknown_number" // message to a number no shop has connected
@@ -11,15 +12,19 @@ export type HandleOutcome =
   | "office"
   | "store";
 
+export interface EngineDeps {
+  repo: Repo;
+  messengerFor: (account: WaAccount) => Messenger;
+  ai: LlmProvider | null;
+  now?: () => Date;
+}
+
 /**
  * Entry point for every inbound WhatsApp message:
  * find the shop → who is writing (staff or customer) → log → route to back office or storefront.
  */
-export async function handleInbound(
-  repo: Repo,
-  sendFor: (account: { phoneNumberId: string; tokenSecretId: string | null }) => Send,
-  message: InboundMessage,
-): Promise<HandleOutcome> {
+export async function handleInbound(deps: EngineDeps, message: InboundMessage): Promise<HandleOutcome> {
+  const { repo } = deps;
   const found = await repo.findAccount(message.phoneNumberId);
   if (!found) return "unknown_number";
   const { business, account } = found;
@@ -34,24 +39,35 @@ export async function handleInbound(
         customer: await repo.getOrCreateCustomer(business.id, message.from, message.profileName),
       };
 
-  const isNew = await repo.logInbound(business.id, message, party);
-  if (!isNew) return "duplicate";
-
   const conversation = await repo.getOrCreateConversation(business.id, message.from, party);
+  const isNew = await repo.logInbound(business.id, message, party, conversation.id);
+  if (!isNew) return "duplicate";
   await repo.updateConversation(conversation.id, { inbound: true });
 
   if (conversation.mode === "human" && party.kind === "customer") return "human_mode";
 
-  const send = sendFor(account);
+  const messenger = deps.messengerFor(account);
   const ctx: Context = {
     repo,
     business,
     conversation,
     party,
     message,
+    ai: deps.ai,
+    now: deps.now?.() ?? new Date(),
     reply: async (msg) => {
-      const result = await send(message.from, msg);
+      const result = await messenger.send(message.from, msg);
       await repo.logOutbound(business.id, conversation.id, message.from, msg, result.messageId);
+    },
+    replyFile: async (file, caption) => {
+      const result = await messenger.sendFile(message.from, file, caption);
+      await repo.logOutbound(
+        business.id,
+        conversation.id,
+        message.from,
+        { type: "document", link: "", filename: file.filename, caption },
+        result.messageId,
+      );
     },
   };
 

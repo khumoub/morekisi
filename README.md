@@ -6,7 +6,7 @@ Morekisi turns a shop's WhatsApp number into its **online shop**, its **customer
 
 The first market is hardware shops and small wholesalers in Botswana. See [`SPEC.md`](SPEC.md) for the full product specification and build plan.
 
-## Status: Phase 1, week 2
+## Status: Phase 1, week 3
 
 | Done | |
 |---|---|
@@ -21,7 +21,12 @@ The first market is hardware shops and small wholesalers in Botswana. See [`SPEC
 | ✅ **Settings**: shop details, VAT and invoice footer, welcome message, order approval, delivery areas and fees, owner controls | `src/app/app/settings` |
 | ✅ **Staff**: add by phone with a role, change roles, remove access (can't remove yourself or the last owner) | `src/app/app/settings/staff` |
 | ✅ **WhatsApp connection** per shop; access tokens stored encrypted in Supabase Vault | `src/app/app/settings/whatsapp` |
-| ⏭️ Next: AI message understanding; recording sales by WhatsApp with Confirm/Cancel; invoice PDFs | week 3 |
+| ✅ **AI understands staff messages** in everyday English and Setswana (sales, payments, stock in, stock/price checks, balances, reports, open questions, yes/no). Works with Claude or OpenAI; keyword fallback if the AI is off or down | `src/lib/ai` |
+| ✅ **Sales on WhatsApp**: products and customers matched against the shop's data, asks "which one?" when unsure, summary with **Confirm / Cancel**, stock and credit-limit warnings, discount limit for staff | `src/lib/office` |
+| ✅ **Invoice PDFs** (tax invoice with VAT breakdown) sent straight back in the chat | `src/lib/pdf` |
+| ✅ **Payments and stock in** on WhatsApp with confirmation; receipts numbered RCPT-… | `src/lib/office/flows.ts` |
+| ✅ **Reports and questions**: "sales today", "who owes us", "what sold best this month?". Answers come only from real data; staff never see profit | `src/lib/office/answers.ts` |
+| ⏭️ Next: quotations on WhatsApp, customer accounts and statements | week 4 |
 
 ## Getting started
 
@@ -43,6 +48,7 @@ npm run dev
 npm test            # unit + engine tests (no database needed)
 npm run test:db     # all migrations + end-to-end business flows on a throwaway Postgres 16
 npm run typecheck
+npm run eval:ai     # how well the real AI understands ~40 real-style shop messages (calls the model; costs a few cents)
 ```
 
 ## Stack
