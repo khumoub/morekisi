@@ -7,6 +7,11 @@ const serverEnvSchema = z.object({
   WHATSAPP_APP_SECRET: z.string().min(1),
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   WHATSAPP_API_VERSION: z.string().default("v23.0"),
+  // Login codes over WhatsApp (Supabase "Send SMS" hook) — optional; without them use Supabase's SMS provider.
+  MOREKISI_PLATFORM_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_LOGIN_TEMPLATE: z.string().default("morekisi_login_code"),
+  WHATSAPP_LOGIN_TEMPLATE_LANG: z.string().default("en"),
+  SUPABASE_SEND_SMS_HOOK_SECRET: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

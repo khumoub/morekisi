@@ -38,7 +38,29 @@ export type OutboundMessage =
   | { type: "buttons"; body: string; buttons: Button[]; header?: string; footer?: string }
   | { type: "list"; body: string; button: string; sections: ListSection[]; header?: string; footer?: string }
   | { type: "document"; link: string; filename: string; caption?: string }
-  | { type: "location_request"; body: string };
+  | { type: "location_request"; body: string }
+  | { type: "template"; name: string; language: string; components?: TemplateComponent[] };
+
+/** A pre-approved template, required for messages sent outside the 24-hour window (and for login codes). */
+export interface TemplateComponent {
+  type: "header" | "body" | "button";
+  sub_type?: "url" | "quick_reply" | "copy_code";
+  index?: string;
+  parameters: { type: "text"; text: string }[];
+}
+
+/** WhatsApp "authentication" template: the code in the body plus a copy-code button. */
+export function loginCodeTemplate(name: string, language: string, code: string): OutboundMessage {
+  return {
+    type: "template",
+    name,
+    language,
+    components: [
+      { type: "body", parameters: [{ type: "text", text: code }] },
+      { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: code }] },
+    ],
+  };
+}
 
 /** Shortens to fit a Meta limit, adding an ellipsis. */
 export function fit(text: string, max: number): string {
@@ -117,6 +139,17 @@ export function buildPayload(to: string, msg: OutboundMessage): Record<string, u
           type: "location_request_message",
           body: { text: fit(msg.body, LIMITS.bodyText) },
           action: { name: "send_location" },
+        },
+      };
+
+    case "template":
+      return {
+        ...base,
+        type: "template",
+        template: {
+          name: msg.name,
+          language: { code: msg.language },
+          ...(msg.components && { components: msg.components }),
         },
       };
   }

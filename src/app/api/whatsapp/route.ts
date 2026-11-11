@@ -6,6 +6,7 @@ import { handleInbound } from "@/lib/engine/handle";
 import { parseWebhook } from "@/lib/whatsapp/inbound";
 import { markRead, sendMessage, type SendConfig } from "@/lib/whatsapp/outbound";
 import { verifySignature } from "@/lib/whatsapp/signature";
+import { tokenFor } from "@/lib/whatsapp/tokens";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,25 +45,21 @@ export async function POST(req: NextRequest) {
     const db = adminClient();
     const repo = supabaseRepo(db);
 
-    const configFor = (account: { phoneNumberId: string; tokenSecretId: string | null }): SendConfig => {
-      // TODO(week 2): read per-shop tokens from Supabase Vault (account.tokenSecretId) for Embedded Signup.
-      if (!env.WHATSAPP_ACCESS_TOKEN) throw new Error("WHATSAPP_ACCESS_TOKEN is not set");
-      return {
-        phoneNumberId: account.phoneNumberId,
-        accessToken: env.WHATSAPP_ACCESS_TOKEN,
-        apiVersion: env.WHATSAPP_API_VERSION,
-      };
-    };
+    const configFor = async (phoneNumberId: string): Promise<SendConfig> => ({
+      phoneNumberId,
+      accessToken: await tokenFor(db, phoneNumberId, env.WHATSAPP_ACCESS_TOKEN),
+      apiVersion: env.WHATSAPP_API_VERSION,
+    });
 
     for (const message of messages) {
       try {
         const outcome = await handleInbound(
           repo,
-          (account) => (to, msg) => sendMessage(configFor(account), to, msg),
+          (account) => async (to, msg) => sendMessage(await configFor(account.phoneNumberId), to, msg),
           message,
         );
         if (outcome !== "unknown_number" && outcome !== "duplicate") {
-          await markRead(configFor({ phoneNumberId: message.phoneNumberId, tokenSecretId: null }), message.messageId);
+          await markRead(await configFor(message.phoneNumberId), message.messageId);
         }
       } catch (err) {
         console.error("whatsapp: failed to handle message", message.messageId, err);

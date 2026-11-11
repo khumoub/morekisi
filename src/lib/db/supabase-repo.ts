@@ -20,6 +20,8 @@ function outboundText(msg: OutboundMessage): string {
       return msg.body;
     case "document":
       return `[document ${msg.filename}]`;
+    case "template":
+      return `[template ${msg.name}]`;
   }
 }
 

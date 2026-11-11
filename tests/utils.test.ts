@@ -5,6 +5,7 @@ import { toE164, toWaId } from "@/lib/phone";
 import { verifySignature } from "@/lib/whatsapp/signature";
 import { buildPayload, fit } from "@/lib/whatsapp/outbound";
 import { parseWebhook } from "@/lib/whatsapp/inbound";
+import { formatDeliveryAreas, parseDeliveryAreas } from "@/lib/delivery-areas";
 
 describe("money", () => {
   it("formats thebe as Pula", () => {
@@ -118,5 +119,28 @@ describe("webhook parsing", () => {
   });
   it("ignores other webhook objects", () => {
     expect(parseWebhook({ object: "page" }).messages).toHaveLength(0);
+  });
+});
+
+
+describe("delivery areas", () => {
+  it("reads what owners type", () => {
+    const { areas, errors } = parseDeliveryAreas("Tlokweng = 150\nMogoditshane: P200\n\nBlock 8 free\nGaborone West 75.50\nPhakalane - 1,000");
+    expect(errors).toEqual([]);
+    expect(areas).toEqual([
+      { name: "Tlokweng", fee: 15000 },
+      { name: "Mogoditshane", fee: 20000 },
+      { name: "Block 8", fee: 0 },
+      { name: "Gaborone West", fee: 7550 },
+      { name: "Phakalane", fee: 100000 },
+    ]);
+  });
+  it("reports lines it can't read", () => {
+    expect(parseDeliveryAreas("Tlokweng\nKanye = abc").errors).toHaveLength(2);
+  });
+  it("round-trips", () => {
+    const text = formatDeliveryAreas([{ name: "Tlokweng", fee: 15000 }, { name: "Block 8", fee: 0 }]);
+    expect(text).toBe("Tlokweng = 150.00\nBlock 8 = free");
+    expect(parseDeliveryAreas(text).areas).toEqual([{ name: "Tlokweng", fee: 15000 }, { name: "Block 8", fee: 0 }]);
   });
 });
