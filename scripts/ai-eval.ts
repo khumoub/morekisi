@@ -25,7 +25,7 @@ const catalogue = [
   { name: "Nails 75mm 1kg", unit: "kg" },
 ];
 
-type Expect = Partial<Pick<Interpretation, "intent" | "customer" | "payment_method" | "amount" | "supplier" | "period">> & {
+type Expect = Partial<Pick<Interpretation, "intent" | "customer" | "payment_method" | "amount" | "supplier" | "period" | "quote_no">> & {
   items?: { product: string | RegExp; qty?: number | null; unit_price?: number | null }[];
   language?: "en" | "tn";
 };
@@ -79,7 +79,10 @@ const cases: Case[] = [
   { message: "profit this month?", expect: { intent: "report", period: "this_month" } },
   { message: "which product sells the most this month", expect: { intent: "ask" } },
   { message: "should I order more cement?", expect: { intent: "ask" } },
-  { message: "quote Tlotlo 100 bricks and 10 cement", expect: { intent: "create_quote", customer: "Tlotlo" } },
+  { message: "quote Tlotlo 100 bricks and 10 cement", expect: { intent: "create_quote", customer: "Tlotlo", items: [{ product: "Bricks Cement 140mm", qty: 100 }, { product: /cement/i, qty: 10 }] } },
+  { message: "make a quotation for Mpho: 20 ibr sheets", expect: { intent: "create_quote", customer: "Mpho", items: [{ product: "IBR Roof Sheet 0.47mm 6m", qty: 20 }] } },
+  { message: "QT-00012 accepted, cash", expect: { intent: "accept_quote", quote_no: "00012", payment_method: "cash" } },
+  { message: "Tlotlo accepted quote 15 on account", expect: { intent: "accept_quote", quote_no: "15", payment_method: "credit" } },
 
   // Conversation
   { message: "hi", expect: { intent: "help" } },
@@ -107,7 +110,7 @@ function same(a: unknown, b: unknown) {
 
 function check(got: Interpretation, exp: Expect): string[] {
   const problems: string[] = [];
-  for (const key of ["intent", "customer", "payment_method", "amount", "supplier", "period", "language"] as const) {
+  for (const key of ["intent", "customer", "payment_method", "amount", "supplier", "period", "quote_no", "language"] as const) {
     if (key in exp && !same(got[key], exp[key])) problems.push(`${key}: expected ${JSON.stringify(exp[key])}, got ${JSON.stringify(got[key])}`);
   }
   if (exp.items) {

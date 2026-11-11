@@ -39,3 +39,17 @@ describe("invoice PDF", () => {
     if (process.env.PDF_OUT) (await import("node:fs")).writeFileSync(process.env.PDF_OUT, pdf);
   });
 });
+
+describe("quotation PDF", () => {
+  it("renders a quotation with a validity date and no payment method", async () => {
+    const pdf = await renderInvoicePdf({
+      ...SAMPLE_INVOICE,
+      kind: "quote",
+      valid_until: "2026-11-25",
+      sale: { ...SAMPLE_INVOICE.sale, invoice_no: "QT-00012", payment_method: null, status: "open" },
+      balance_after: null,
+    });
+    expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+    if (process.env.QUOTE_OUT) (await import("node:fs")).writeFileSync(process.env.QUOTE_OUT, pdf);
+  });
+});

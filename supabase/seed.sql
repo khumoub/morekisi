@@ -50,10 +50,10 @@ insert into stock_movements (business_id, product_id, qty, type, reason) values
   ('d0000000-0000-0000-0000-000000000001', 'd3000000-0000-0000-0000-000000000009', 9, 'opening', 'Demo data'),
   ('d0000000-0000-0000-0000-000000000001', 'd3000000-0000-0000-0000-000000000010', 80, 'opening', 'Demo data');
 
-insert into customers (id, business_id, name, phone, company, credit_limit, tags) values
-  ('d4000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'Kabelo Molefe', '+26772111111', null, 500000, '{builder}'),
-  ('d4000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000001', 'Tlotlo Ntsima', '+26772222222', 'Tlotlo Construction (Pty) Ltd', 2000000, '{contractor}'),
-  ('d4000000-0000-0000-0000-000000000003', 'd0000000-0000-0000-0000-000000000001', 'Mpho Kgosi', '+26772333333', null, 0, '{}');
+insert into customers (id, business_id, name, phone, wa_id, company, credit_limit, tags) values
+  ('d4000000-0000-0000-0000-000000000001', 'd0000000-0000-0000-0000-000000000001', 'Kabelo Molefe', '+26772111111', '26772111111', null, 500000, '{builder}'),
+  ('d4000000-0000-0000-0000-000000000002', 'd0000000-0000-0000-0000-000000000001', 'Tlotlo Ntsima', '+26772222222', '26772222222', 'Tlotlo Construction (Pty) Ltd', 2000000, '{contractor}'),
+  ('d4000000-0000-0000-0000-000000000003', 'd0000000-0000-0000-0000-000000000001', 'Mpho Kgosi', '+26772333333', '26772333333', null, 0, '{}');
 
 -- A few sales so the dashboard and reports have something to show
 do $$

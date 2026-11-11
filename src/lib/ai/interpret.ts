@@ -9,7 +9,8 @@ Choose exactly one intent:
 - record_sale: something was sold ("sold", "rekisitse", "customer took", "invoice X for…").
 - record_payment: a customer paid money they owed ("Kabelo paid 500", "o duetse").
 - stock_in: goods arrived from a supplier ("received", "delivered by", "stock in", "re amogetse").
-- create_quote: someone wants a price quotation prepared.
+- create_quote: prepare a price quotation for a customer ("quote Tlotlo 100 bricks", "give Mpho a quotation for…"). Same item fields as a sale.
+- accept_quote: a quotation was accepted and should become a sale ("QT-12 accepted", "Tlotlo accepted quote 15, paying cash").
 - check_stock: how much of something is in stock.
 - check_price: the selling price of something.
 - customer_balance: what a customer owes, or who owes the shop.
@@ -26,6 +27,7 @@ Fields:
 - payment_method: cash, card (also "swipe"), orange_money ("OM", "orange"), myzaka ("mascom", "my zaka"), smega ("BTC", "be mobile"), eft ("transfer", "bank"), credit ("on account", "on credit", "pay later", "o tla duela"), or null if not said.
 - amount: Pula amount for payments, else null.
 - supplier: for stock_in, the supplier's name or null.
+- quote_no: for accept_quote, the quotation number as written ("QT-00012", "12"), else null.
 - period: for report/ask about a time range: today, yesterday, this_week, last_week, this_month, last_month; else null.
 - question: for ask, the question restated clearly in English; else null.
 - reply: only for unclear and help — a short message to send back, in the person's language; else null.

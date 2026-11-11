@@ -6,7 +6,7 @@ Morekisi turns a shop's WhatsApp number into its **online shop**, its **customer
 
 The first market is hardware shops and small wholesalers in Botswana. See [`SPEC.md`](SPEC.md) for the full product specification and build plan.
 
-## Status: Phase 1, week 3
+## Status: Phase 1, week 4
 
 | Done | |
 |---|---|
@@ -26,7 +26,11 @@ The first market is hardware shops and small wholesalers in Botswana. See [`SPEC
 | ✅ **Invoice PDFs** (tax invoice with VAT breakdown) sent straight back in the chat | `src/lib/pdf` |
 | ✅ **Payments and stock in** on WhatsApp with confirmation; receipts numbered RCPT-… | `src/lib/office/flows.ts` |
 | ✅ **Reports and questions**: "sales today", "who owes us", "what sold best this month?". Answers come only from real data; staff never see profit | `src/lib/office/answers.ts` |
-| ⏭️ Next: quotations on WhatsApp, customer accounts and statements | week 4 |
+| ✅ **Quotations on WhatsApp**: "quote Tlotlo 100 bricks…" → confirm → quotation PDF; "QT-00012 accepted, cash" → sale at the quoted prices + invoice | `src/lib/office/flows.ts`, `0006_quotes_statements.sql` |
+| ✅ **Dashboard: Sales** (invoice PDFs, void with reason), **Quotations** (PDF, convert to sale), **Customers** (balances, owing filter, account history, statement PDF, credit limits) | `src/app/app/sales`, `quotations`, `customers` |
+| ✅ **Chat simulator** (local): talk to the bot as staff or a customer without WhatsApp | `src/app/app/simulator` |
+| ✅ Staff can't read sale or purchase costs, even through the database API | `0006_quotes_statements.sql` |
+| ⏭️ Next: customers ordering on WhatsApp (cart, checkout) and the order-approval queue | week 5 |
 
 ## Run it locally with Docker (recommended)
 

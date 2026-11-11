@@ -13,7 +13,8 @@ export const INTENTS = [
   "record_sale", // "sold 20 cement to Kabelo on credit"
   "record_payment", // "Kabelo paid P500 Orange Money"
   "stock_in", // "received 200 cement from Builders Depot at P78"
-  "create_quote", // "quote Tlotlo 100 bricks" (week 4)
+  "create_quote", // "quote Tlotlo 100 bricks"
+  "accept_quote", // "QT-00012 accepted, cash" — turn a quotation into a sale
   "check_stock", // "how much rebar do we have"
   "check_price", // "price of 6m IBR sheet"
   "customer_balance", // "who owes us", "Kabelo balance"
@@ -42,6 +43,7 @@ export const interpretationSchema = z.object({
   amount: z.number().nullable(), // Pula, for payments
   supplier: z.string().nullable(),
   period: z.enum(PERIODS).nullable(),
+  quote_no: z.string().nullable(), // for accept_quote: "QT-00012"
   question: z.string().nullable(), // for "ask": the question restated clearly
   reply: z.string().nullable(), // for "unclear"/"help": what to say back
   language: z.enum(["en", "tn"]), // reply in English or Setswana
@@ -55,7 +57,7 @@ const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type:
 export const interpretationJsonSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["intent", "items", "customer", "payment_method", "amount", "supplier", "period", "question", "reply", "language"],
+  required: ["intent", "items", "customer", "payment_method", "amount", "supplier", "period", "quote_no", "question", "reply", "language"],
   properties: {
     intent: { type: "string", enum: [...INTENTS] },
     items: {
@@ -76,6 +78,7 @@ export const interpretationJsonSchema = {
     amount: nullable({ type: "number" }),
     supplier: nullable({ type: "string" }),
     period: nullable({ type: "string", enum: [...PERIODS] }),
+    quote_no: nullable({ type: "string" }),
     question: nullable({ type: "string" }),
     reply: nullable({ type: "string" }),
     language: { type: "string", enum: ["en", "tn"] },

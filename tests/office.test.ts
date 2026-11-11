@@ -261,3 +261,81 @@ describe("when the AI is unavailable", () => {
     expect(shop.lastText()).toBe("Did Kabelo buy 20 of something, or pay P20?");
   });
 });
+
+describe("quotations", () => {
+  const QUOTE = "quote tlotlo 10 cement 42.5 and 2 rebar 12mm at 110";
+  const quoteAI = (extra: ConstructorParameters<typeof FakeAI>[0] = {}) =>
+    new FakeAI({
+      [QUOTE]: {
+        intent: "create_quote",
+        items: [
+          { product: "Cement 42.5N 50kg", qty: 10, unit_price: null },
+          { product: "Rebar Y12 6m", qty: 2, unit_price: 110 },
+        ],
+        customer: "tlotlo",
+      },
+      "QT-00001 accepted, cash": { intent: "accept_quote", quote_no: "QT-00001", payment_method: "cash" },
+      "quote 1 accepted on credit": { intent: "accept_quote", quote_no: "1", payment_method: "credit" },
+      ...extra,
+    });
+
+  it("prepares a quotation PDF after confirmation, without touching stock", async () => {
+    const shop = fakeShop({ ai: quoteAI() });
+    await shop.say(STAFF, QUOTE);
+    expect(shop.lastText()).toContain("📝 *Quotation — Tlotlo Ntsima*");
+    expect(shop.lastText()).toContain("10 × Cement 42.5N 50kg @ P95.00 = P950.00");
+    expect(shop.lastText()).toContain("2 × Rebar Y12 6m @ P110.00 = P220.00");
+    expect(shop.lastText()).toContain("*Total P1,170.00*");
+    await shop.tap(STAFF, "pa:yes");
+    expect(shop.quotes).toHaveLength(1);
+    expect(shop.files.at(-1)!.filename).toBe("QT-00001.pdf");
+    expect(shop.files.at(-1)!.data.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(shop.lastText()).toContain("When they accept, send *QT-00001 accepted, cash*");
+    expect(shop.sales).toHaveLength(0);
+    expect(shop.products.find((p) => p.id === "p1")!.onHand).toBe(54);
+  });
+
+  it("quotes someone who isn't a customer yet", async () => {
+    const msg = "quote mpho 5 rebar";
+    const shop = fakeShop({ ai: new FakeAI({ [msg]: { intent: "create_quote", items: [{ product: "Rebar Y12 6m", qty: 5, unit_price: null }], customer: "mpho" } }) });
+    await shop.say(STAFF, msg);
+    expect(shop.lastText()).toContain("*Mpho* isn't a customer yet");
+    await shop.tap(STAFF, "pa:yes");
+    expect(shop.quotes[0]).toMatchObject({ customerId: null, customerName: "Mpho" });
+    expect(shop.createdCustomers).toEqual([]);
+  });
+
+  it("turns an accepted quotation into a sale at the quoted prices", async () => {
+    const shop = fakeShop({ ai: quoteAI() });
+    await shop.say(STAFF, QUOTE);
+    await shop.tap(STAFF, "pa:yes");
+    shop.products.find((p) => p.id === "p3")!.price = 15000; // price went up since the quote
+
+    await shop.say(STAFF, "QT-00001 accepted, cash");
+    expect(shop.lastText()).toContain("🧾 *Sale from QT-00001 — Tlotlo Ntsima*");
+    expect(shop.lastText()).toContain("*Total P1,170.00* (quoted prices)");
+    await shop.tap(STAFF, "pa:yes");
+    expect(shop.sales[0]).toMatchObject({ customerId: "c2", method: "cash" });
+    expect(shop.sales[0].items).toContainEqual({ productId: "p3", qty: 2, unitPrice: 11000 });
+    expect(shop.lastText()).toContain("✅ QT-00001 accepted and saved as *INV-00001*: P1,170.00.");
+    expect(shop.files.at(-1)!.filename).toBe("INV-00001.pdf");
+
+    await shop.say(STAFF, "quote 1 accepted on credit");
+    expect(shop.lastText()).toContain("Quotation *QT-00001* is already accepted.");
+  });
+
+  it("says when a quotation number doesn't exist", async () => {
+    const shop = fakeShop({ ai: quoteAI({ "QT-99 accepted": { intent: "accept_quote", quote_no: "QT-99" } }) });
+    await shop.say(STAFF, "QT-99 accepted");
+    expect(shop.lastText()).toContain("couldn't find quotation *QT-00099*");
+  });
+
+  it("understands the accepted-quotation form without AI", async () => {
+    const { parseCommand } = await import("@/lib/office");
+    const { normaliseQuoteNo } = await import("@/lib/office/flows");
+    expect(parseCommand("QT-00012 accepted, cash")).toMatchObject({ intent: "accept_quote", payment_method: "cash" });
+    expect(normaliseQuoteNo(parseCommand("quote qt 7 accepted").quote_no)).toBe("QT-00007");
+    expect(normaliseQuoteNo("QT-00012")).toBe("QT-00012");
+    expect(normaliseQuoteNo(null)).toBeNull();
+  });
+});

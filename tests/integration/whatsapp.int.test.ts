@@ -150,3 +150,28 @@ describe("WhatsApp → engine → local Supabase", () => {
     expect(history.map((h) => h.direction)).toEqual(["in", "out"]);
   });
 });
+
+describe("quotations on the real database", () => {
+  it("creates a quotation PDF, then converts it to a sale at the quoted price", async () => {
+    const make = `quote mpho 3 paint at 850 (${run})`;
+    const ai = new FakeAI({
+      [make]: { intent: "create_quote", items: [{ product: "Plascon Wall Paint White 20L", qty: 3, unit_price: 850 }], customer: `Mpho Test ${run}` },
+    });
+    await say(OWNER, make, ai);
+    expect(lastText()).toContain("📝 *Quotation");
+    await say(OWNER, "yes", ai);
+    const quoteNo = /Quotation \*(QT-\d{5})\*/.exec(lastText())![1];
+    expect(files.at(-1)!.filename).toBe(`${quoteNo}.pdf`);
+    const paintBefore = await onHand("PW20");
+
+    const accept = `${quoteNo} accepted, cash`;
+    const ai2 = new FakeAI({ [accept]: { intent: "accept_quote", quote_no: quoteNo, payment_method: "cash" } });
+    await say(OWNER, accept, ai2);
+    expect(lastText()).toContain(`Sale from ${quoteNo}`);
+    await say(OWNER, { kind: "button", id: "pa:yes", title: "✅ Confirm" }, ai2);
+    expect(lastText()).toMatch(new RegExp(`✅ ${quoteNo} accepted and saved as \\*INV-\\d{5}\\*: P2,550\\.00\\.`));
+    expect(await onHand("PW20")).toBe(paintBefore - 3);
+    const { data: q } = await db.from("quotations").select("status").eq("quote_no", quoteNo).single();
+    expect(q!.status).toBe("accepted");
+  });
+});

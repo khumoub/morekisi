@@ -1,7 +1,7 @@
 import type { Interpretation } from "@/lib/ai/intent";
 import type { Context, PaymentMethod, ProductMatch } from "@/lib/engine/types";
 import { parsePula } from "@/lib/money";
-import { renderInvoicePdf } from "@/lib/pdf/invoice";
+import { renderInvoicePdf, type InvoiceData } from "@/lib/pdf/invoice";
 import { fmtQty, formatPula, grandTotal, lineTotal, METHOD_LABEL, vatIncluded } from "./format";
 
 /**
@@ -38,7 +38,10 @@ interface DraftCustomer {
 export type Draft =
   | { kind: "sale"; lines: DraftLine[]; customer: DraftCustomer | null; method: PaymentMethod; methodDefaulted: boolean }
   | { kind: "payment"; customer: DraftCustomer | null; amount: number; method: Exclude<PaymentMethod, "credit"> }
-  | { kind: "stock_in"; lines: DraftLine[]; supplier: string | null };
+  | { kind: "stock_in"; lines: DraftLine[]; supplier: string | null }
+  /** A quotation. `customer.isNew` here means "just a name" — no customer record is created. */
+  | { kind: "quote"; lines: DraftLine[]; customer: DraftCustomer | null }
+  | { kind: "quote_accept"; quoteId: string; quoteNo: string; method: PaymentMethod; methodDefaulted: boolean };
 
 type Step =
   | { stage: "choose_product"; index: number; options: ResolvedProduct[] }
@@ -64,7 +67,7 @@ const toResolved = (m: ProductMatch): ResolvedProduct => ({
 // ───────────────────────── Starting a draft from the AI's interpretation ─────────────────────────
 
 export async function startDraft(ctx: Context, it: Interpretation): Promise<void> {
-  if (it.intent === "record_sale" || it.intent === "stock_in") {
+  if (it.intent === "record_sale" || it.intent === "stock_in" || it.intent === "create_quote") {
     if (it.items.length === 0) {
       await ctx.reply({ type: "text", text: "Which products? For example: *sold 20 cement and 5 rebar 12mm to Kabelo, cash*" });
       return;
@@ -75,16 +78,13 @@ export async function startDraft(ctx: Context, it: Interpretation): Promise<void
       return;
     }
     const lines: DraftLine[] = it.items.map((i) => ({ text: i.product, qty: i.qty!, unitPrice: toThebe(i.unit_price), product: null }));
+    const customer = it.customer ? { text: it.customer, id: null, name: null, isNew: false } : null;
     const draft: Draft =
       it.intent === "record_sale"
-        ? {
-            kind: "sale",
-            lines,
-            customer: it.customer ? { text: it.customer, id: null, name: null, isNew: false } : null,
-            method: it.payment_method ?? "cash",
-            methodDefaulted: it.payment_method === null,
-          }
-        : { kind: "stock_in", lines, supplier: it.supplier };
+        ? { kind: "sale", lines, customer, method: it.payment_method ?? "cash", methodDefaulted: it.payment_method === null }
+        : it.intent === "create_quote"
+          ? { kind: "quote", lines, customer }
+          : { kind: "stock_in", lines, supplier: it.supplier };
     await advance(ctx, draft);
     return;
   }
@@ -102,7 +102,38 @@ export async function startDraft(ctx: Context, it: Interpretation): Promise<void
       method,
       customer: it.customer ? { text: it.customer, id: null, name: null, isNew: false } : null,
     });
+    return;
   }
+
+  if (it.intent === "accept_quote") {
+    const quoteNo = normaliseQuoteNo(it.quote_no);
+    if (!quoteNo) {
+      await ctx.reply({ type: "text", text: "Which quotation? For example: *QT-00012 accepted, cash*" });
+      return;
+    }
+    const quote = await ctx.repo.findQuote(ctx.business.id, quoteNo);
+    if (!quote) {
+      await ctx.reply({ type: "text", text: `I couldn't find quotation *${quoteNo}*.` });
+      return;
+    }
+    if (quote.status === "accepted" || quote.status === "cancelled") {
+      await ctx.reply({ type: "text", text: `Quotation *${quoteNo}* is already ${quote.status}.` });
+      return;
+    }
+    await advance(ctx, {
+      kind: "quote_accept",
+      quoteId: quote.id,
+      quoteNo,
+      method: it.payment_method ?? "cash",
+      methodDefaulted: it.payment_method === null,
+    });
+  }
+}
+
+/** "12", "qt12", "QT-00012" → "QT-00012" */
+export function normaliseQuoteNo(raw: string | null): string | null {
+  const digits = raw?.match(/\d+/)?.[0];
+  return digits ? `QT-${digits.padStart(5, "0")}` : null;
 }
 
 // ───────────────────────── Resolving, asking, summarising ─────────────────────────
@@ -121,11 +152,11 @@ export async function advance(ctx: Context, draft: Draft): Promise<void> {
   const { repo, business } = ctx;
 
   // 1. Products
-  if (draft.kind !== "payment") {
+  if ("lines" in draft) {
     for (let i = 0; i < draft.lines.length; i++) {
       const line = draft.lines[i];
       if (line.product) continue;
-      const matches = draft.kind === "sale" || draft.kind === "stock_in" ? await repo.matchProducts(business.id, line.text) : [];
+      const matches = await repo.matchProducts(business.id, line.text);
       const exact = matches.find((m) => m.name.toLowerCase() === line.text.toLowerCase());
       if (exact || matches.length === 1) {
         line.product = toResolved(exact ?? matches[0]);
@@ -152,7 +183,7 @@ export async function advance(ctx: Context, draft: Draft): Promise<void> {
   }
 
   // 2. Customer
-  if (draft.kind !== "stock_in") {
+  if (draft.kind === "sale" || draft.kind === "payment" || draft.kind === "quote") {
     const c = draft.customer;
     if (c && !c.id && !c.isNew) {
       const matches = await repo.matchCustomers(business.id, c.text);
@@ -174,6 +205,7 @@ export async function advance(ctx: Context, draft: Draft): Promise<void> {
         await save(ctx, draft, { stage: "choose_customer", options });
         const rows = options.map((o, n) => ({ id: `pick:${n}`, title: o.name }));
         if (draft.kind === "sale") rows.push({ id: "pick:new", title: `New: ${titleCase(c.text)}` });
+        if (draft.kind === "quote") rows.push({ id: "pick:new", title: `Someone else: ${titleCase(c.text)}` });
         await ctx.reply({ type: "list", body: `Which customer is *${c.text}*?`, button: "Choose customer", sections: [{ rows }] });
         return;
       }
@@ -190,7 +222,7 @@ export async function advance(ctx: Context, draft: Draft): Promise<void> {
   }
 
   // 3. Rules
-  if (draft.kind === "sale") {
+  if (draft.kind === "sale" || draft.kind === "quote") {
     const settings = await repo.shopSettings(business.id);
     const role = ctx.party.kind === "staff" ? ctx.party.user.role : "staff";
     for (const l of draft.lines) {
@@ -272,6 +304,41 @@ async function summarise(ctx: Context, draft: Draft): Promise<string> {
     ].join("\n");
   }
 
+  if (draft.kind === "quote") {
+    const settings = await repo.shopSettings(business.id);
+    const who = draft.customer?.name ?? null;
+    const itemsTotal = draft.lines.reduce((t, l) => t + lineTotal(l.qty, l.unitPrice ?? l.product!.price), 0);
+    const vat = vatIncluded(itemsTotal, settings);
+    return [
+      `📝 *Quotation${who ? ` — ${who}` : ""}*`,
+      "",
+      ...draft.lines.map((l) => {
+        const price = l.unitPrice ?? l.product!.price;
+        return `${fmtQty(l.qty)} × ${l.product!.name} @ ${formatPula(price)} = ${formatPula(lineTotal(l.qty, price))}`;
+      }),
+      "",
+      `*Total ${formatPula(grandTotal(itemsTotal, settings))}*${vat ? ` (incl. VAT ${formatPula(vat)})` : ""}`,
+      "Valid for 14 days. Stock is not reserved.",
+      ...(draft.customer?.isNew ? ["", `👤 *${draft.customer.name}* isn't a customer yet; they'll be added if they buy on credit.`] : []),
+    ].join("\n");
+  }
+
+  if (draft.kind === "quote_accept") {
+    const q = (await repo.findQuote(business.id, draft.quoteNo))!;
+    const notes: string[] = [];
+    if (q.status === "expired") notes.push(`⚠️ This quotation expired on ${q.validUntil}. It will be sold at the quoted prices.`);
+    if (draft.method === "credit" && !q.customerId && q.customerName) notes.push(`👤 *${q.customerName}* will be added as a customer`);
+    return [
+      `🧾 *Sale from ${q.quoteNo}${q.customerName ? ` — ${q.customerName}` : ""}*`,
+      "",
+      ...q.items.map((i) => `${fmtQty(i.qty)} × ${i.description} @ ${formatPula(i.unitPrice)} = ${formatPula(i.lineTotal)}`),
+      "",
+      `*Total ${formatPula(q.total)}* (quoted prices)`,
+      `Payment: ${METHOD_LABEL[draft.method]}${draft.methodDefaulted ? ' _(say "credit", "card" or "orange money" to change)_' : ""}`,
+      ...(notes.length ? ["", ...notes] : []),
+    ].join("\n");
+  }
+
   const lines = draft.lines.map(
     (l) => `+${fmtQty(l.qty)} ${l.product!.unit} ${l.product!.name}${l.unitPrice !== null ? ` @ ${formatPula(l.unitPrice)} cost` : ""}`,
   );
@@ -316,15 +383,15 @@ export async function continuePending(ctx: Context, payload: PendingPayload, exp
 
     case "choose_product": {
       const n = pickIndex(buttonId, text, step.options.length);
-      if (n === null || draft.kind === "payment") return false;
+      if (n === null || !("lines" in draft)) return false;
       draft.lines[step.index].product = step.options[n];
       await advance(ctx, draft);
       return true;
     }
 
     case "choose_customer": {
-      if (draft.kind === "stock_in" || !draft.customer) return false;
-      if (buttonId === "pick:new" && draft.kind === "sale") {
+      if (!("customer" in draft) || !draft.customer) return false;
+      if (buttonId === "pick:new" && (draft.kind === "sale" || draft.kind === "quote")) {
         draft.customer = { ...draft.customer, isNew: true, name: titleCase(draft.customer.text) };
         await advance(ctx, draft);
         return true;
@@ -337,7 +404,7 @@ export async function continuePending(ctx: Context, payload: PendingPayload, exp
     }
 
     case "need_customer":
-      if (!text || draft.kind === "stock_in" || text.length > 60 || looksLikeAmount(text)) return false;
+      if (!text || !("customer" in draft) || text.length > 60 || looksLikeAmount(text)) return false;
       draft.customer = { text, id: null, name: null, isNew: false };
       await advance(ctx, draft);
       return true;
@@ -411,15 +478,7 @@ async function execute(ctx: Context, draft: Draft): Promise<void> {
         items: draft.lines.map((l) => ({ productId: l.product!.id, qty: l.qty, unitPrice: l.unitPrice })),
       });
 
-      let pdfSent = false;
-      try {
-        const data = await repo.invoiceData(sale.id);
-        const pdf = await renderInvoicePdf(data);
-        await ctx.replyFile({ data: pdf, filename: `${sale.invoiceNo}.pdf`, mimeType: "application/pdf" }, `${sale.invoiceNo} · ${formatPula(sale.total)}`);
-        pdfSent = true;
-      } catch (err) {
-        console.error("invoice pdf failed", sale.id, err);
-      }
+      const pdfSent = await sendPdf(ctx, () => repo.invoiceData(sale.id), `${sale.invoiceNo}.pdf`, `${sale.invoiceNo} · ${formatPula(sale.total)}`);
 
       const levels = await repo.stockLevels(draft.lines.map((l) => l.product!.id));
       const low = levels.filter((s) => s.lowStock).map((s) => `⚠️ ${s.name} is down to ${fmtQty(s.available)} ${s.unit} (reorder level ${fmtQty(s.reorderLevel)})`);
@@ -446,6 +505,39 @@ async function execute(ctx: Context, draft: Draft): Promise<void> {
       await ctx.reply({
         type: "text",
         text: `✅ Payment saved (*${receiptNo}*): ${formatPula(draft.amount)} from ${draft.customer!.name}. Balance now *${formatPula(balance)}*.`,
+      });
+      return;
+    }
+
+    if (draft.kind === "quote") {
+      const quote = await repo.createQuote({
+        businessId: business.id,
+        userId,
+        customerId: draft.customer?.id ?? null,
+        customerName: draft.customer?.isNew ? draft.customer.name : null,
+        items: draft.lines.map((l) => ({ productId: l.product!.id, qty: l.qty, unitPrice: l.unitPrice })),
+      });
+      const pdfSent = await sendPdf(ctx, () => repo.quoteData(quote.id), `${quote.quoteNo}.pdf`, `${quote.quoteNo} · ${formatPula(quote.total)}`);
+      await ctx.reply({
+        type: "text",
+        text: [
+          `✅ Quotation *${quote.quoteNo}* is ready: ${formatPula(quote.total)}.`,
+          pdfSent ? "Forward the PDF to the customer." : "The PDF couldn't be created right now, but the quotation is saved.",
+          `When they accept, send *${quote.quoteNo} accepted, cash* (or credit, card, orange money…).`,
+        ].join("\n"),
+      });
+      return;
+    }
+
+    if (draft.kind === "quote_accept") {
+      const sale = await repo.convertQuote({ quoteId: draft.quoteId, userId, method: draft.method });
+      const pdfSent = await sendPdf(ctx, () => repo.invoiceData(sale.id), `${sale.invoiceNo}.pdf`, `${sale.invoiceNo} · ${formatPula(sale.total)}`);
+      await ctx.reply({
+        type: "text",
+        text: [
+          `✅ ${draft.quoteNo} accepted and saved as *${sale.invoiceNo}*: ${formatPula(sale.total)}.`,
+          ...(pdfSent ? [] : ["The invoice PDF couldn't be created right now, but the sale is saved."]),
+        ].join("\n"),
       });
       return;
     }
@@ -482,6 +574,18 @@ Not saved: ${notDone.join(", ")}. Please send those again.`,
   } catch (err) {
     console.error("execute failed", draft.kind, err);
     await ctx.reply({ type: "text", text: "⚠️ Sorry, that couldn't be saved. Nothing was recorded. Please try again." });
+  }
+}
+
+/** Renders an invoice/quotation PDF and sends it. A failure here never undoes the saved record. */
+async function sendPdf(ctx: Context, load: () => Promise<InvoiceData>, filename: string, caption: string): Promise<boolean> {
+  try {
+    const pdf = await renderInvoicePdf(await load());
+    await ctx.replyFile({ data: pdf, filename, mimeType: "application/pdf" }, caption);
+    return true;
+  } catch (err) {
+    console.error("pdf failed", filename, err);
+    return false;
   }
 }
 

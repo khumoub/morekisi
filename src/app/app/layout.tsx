@@ -6,6 +6,9 @@ import { signOut, switchBusiness } from "./actions";
 
 const nav = [
   { href: "/app", label: "Home", minRole: "staff" },
+  { href: "/app/sales", label: "Sales", minRole: "staff" },
+  { href: "/app/quotations", label: "Quotations", minRole: "staff" },
+  { href: "/app/customers", label: "Customers", minRole: "staff" },
   { href: "/app/products", label: "Products", minRole: "staff" },
   { href: "/app/settings", label: "Shop settings", minRole: "owner" },
   { href: "/app/settings/staff", label: "Staff", minRole: "owner" },

@@ -89,6 +89,18 @@ export interface PendingAction {
   expiresAt: Date;
 }
 
+export interface QuoteSummary {
+  id: string;
+  quoteNo: string;
+  /** open | accepted | cancelled | expired (open but past its date) */
+  status: string;
+  total: number;
+  validUntil: string;
+  customerId: string | null;
+  customerName: string | null;
+  items: { description: string; qty: number; unitPrice: number; lineTotal: number }[];
+}
+
 export interface SalesSummary {
   count: number;
   revenue: number;
@@ -174,6 +186,18 @@ export interface Repo {
     supplier: string | null;
   }): Promise<void>;
   invoiceData(saleId: string): Promise<InvoiceData>;
+
+  // Quotations
+  createQuote(input: {
+    businessId: string;
+    userId: string;
+    customerId: string | null;
+    customerName: string | null;
+    items: { productId: string; qty: number; unitPrice: number | null }[];
+  }): Promise<{ id: string; quoteNo: string; total: number; validUntil: string }>;
+  quoteData(quoteId: string): Promise<InvoiceData>;
+  findQuote(businessId: string, quoteNo: string): Promise<QuoteSummary | null>;
+  convertQuote(input: { quoteId: string; userId: string; method: PaymentMethod }): Promise<{ id: string; invoiceNo: string; total: number }>;
 
   // Reports (read-only)
   salesSummary(businessId: string, from: Date, to: Date): Promise<SalesSummary>;

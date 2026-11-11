@@ -83,6 +83,10 @@ select pg_temp.fails(format('insert into business_users (business_id, name, phon
                      'row-level security', 'staff cannot add staff');
 select pg_temp.fails(format('select connect_wa_account(%L, %L, %L, %L, %L)', :'biz', 'PN1', 'W1', '+267', 'tok'),
                      'only the owner', 'staff cannot connect WhatsApp');
+select pg_temp.fails('select cost_total from sales', 'permission denied', 'staff cannot read sale costs');
+select pg_temp.fails('select unit_cost from sale_items', 'permission denied', 'staff cannot read line costs');
+select pg_temp.fails('select unit_cost from stock_movements', 'permission denied', 'staff cannot read purchase costs');
+select pg_temp.eq((select count(*) from stock_movements) > 0, true, 'staff can still read stock history');
 select pg_temp.fails('insert into sales (business_id) values (gen_random_uuid())', 'permission denied',
                      'sales are never written from the browser');
 

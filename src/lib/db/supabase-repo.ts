@@ -449,5 +449,56 @@ export function supabaseRepo(db: SupabaseClient): Repo {
         revenue: Number(t.revenue),
       }));
     },
+
+    async createQuote({ businessId, userId, customerId, customerName, items }) {
+      const { data, error } = await db.rpc("create_quote", {
+        p_business: businessId,
+        p_user: userId,
+        p_customer: customerId,
+        p_customer_name: customerName,
+        p_items: items.map((i) => ({ product_id: i.productId, qty: i.qty, ...(i.unitPrice !== null && { unit_price: i.unitPrice }) })),
+      });
+      if (error) fail("createQuote", error);
+      const q = data as { id: string; quote_no: string; total: number; valid_until: string };
+      return { id: q.id, quoteNo: q.quote_no, total: Number(q.total), validUntil: q.valid_until };
+    },
+
+    async quoteData(quoteId) {
+      const { data, error } = await db.rpc("quote_data", { p_quote: quoteId });
+      if (error) fail("quoteData", error);
+      return data as InvoiceData;
+    },
+
+    async findQuote(businessId, quoteNo) {
+      const { data, error } = await db
+        .from("quotations")
+        .select("id, quote_no, status, total, valid_until, customer_id, customer_name, customers(name), quotation_items(description, qty, unit_price, line_total, id)")
+        .eq("business_id", businessId)
+        .eq("quote_no", quoteNo)
+        .maybeSingle();
+      if (error) fail("findQuote", error);
+      if (!data) return null;
+      const today = new Date().toISOString().slice(0, 10);
+      const items = (data.quotation_items as { description: string; qty: number; unit_price: number; line_total: number; id: number }[])
+        .sort((a, b) => a.id - b.id)
+        .map((i) => ({ description: i.description, qty: Number(i.qty), unitPrice: Number(i.unit_price), lineTotal: Number(i.line_total) }));
+      return {
+        id: data.id,
+        quoteNo: data.quote_no,
+        status: data.status === "open" && data.valid_until < today ? "expired" : data.status,
+        total: Number(data.total),
+        validUntil: data.valid_until,
+        customerId: data.customer_id,
+        customerName: (data.customers as unknown as { name: string } | null)?.name ?? data.customer_name,
+        items,
+      };
+    },
+
+    async convertQuote({ quoteId, userId, method }) {
+      const { data, error } = await db.rpc("convert_quote", { p_quote: quoteId, p_user: userId, p_method: method });
+      if (error) fail("convertQuote", error);
+      const sale = data as { id: string; invoice_no: string; total: number };
+      return { id: sale.id, invoiceNo: sale.invoice_no, total: Number(sale.total) };
+    },
   };
 }

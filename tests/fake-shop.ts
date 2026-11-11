@@ -45,6 +45,7 @@ const NULLS = {
   amount: null,
   supplier: null,
   period: null,
+  quote_no: null,
   question: null,
   reply: null,
   language: "en",
@@ -61,6 +62,7 @@ export function fakeShop(opts: { ai?: LlmProvider | null; now?: Date } = {}) {
   const payments: { customerId: string; amount: number; method: string }[] = [];
   const stockIns: { productId: string; qty: number; unitCost: number | null; supplier: string | null }[] = [];
   const createdCustomers: string[] = [];
+  const quotes: { id: string; quoteNo: string; status: string; customerId: string | null; customerName: string | null; validUntil: string; items: { productId: string; qty: number; unitPrice: number }[] }[] = [];
   let clock = opts.now ?? new Date("2026-11-11T10:00:00Z");
 
   const products: Product[] = [
@@ -205,6 +207,48 @@ export function fakeShop(opts: { ai?: LlmProvider | null; now?: Date } = {}) {
         balance_after: null,
       };
     },
+    async createQuote(input) {
+      const items = input.items.map((i) => ({ productId: i.productId, qty: i.qty, unitPrice: i.unitPrice ?? products.find((p) => p.id === i.productId)!.price }));
+      const q = {
+        id: `q${quotes.length + 1}`,
+        quoteNo: `QT-${String(quotes.length + 1).padStart(5, "0")}`,
+        status: "open",
+        customerId: input.customerId,
+        customerName: input.customerName,
+        validUntil: "2026-11-25",
+        items,
+      };
+      quotes.push(q);
+      return { id: q.id, quoteNo: q.quoteNo, total: items.reduce((t, i) => t + Math.round(i.qty * i.unitPrice), 0), validUntil: q.validUntil };
+    },
+    async quoteData(quoteId) {
+      const q = quotes.find((x) => x.id === quoteId)!;
+      const items = q.items.map((i) => ({ description: products.find((p) => p.id === i.productId)!.name, qty: i.qty, unit_price: i.unitPrice, line_total: Math.round(i.qty * i.unitPrice) }));
+      const total = items.reduce((t, i) => t + i.line_total, 0);
+      return {
+        kind: "quote" as const,
+        valid_until: q.validUntil,
+        business: { name: "Molefe Hardware", trading_name: null, address: null, phone: null, email: null, vat_registered: true, vat_number: "P0123", vat_rate_bp: 1400, invoice_footer: null },
+        sale: { invoice_no: q.quoteNo, created_at: clock.toISOString(), payment_method: null, subtotal_excl: total, vat_amount: 0, total, status: q.status },
+        customer: q.customerName ? { name: q.customerName, phone: null, company: null } : null,
+        served_by: "Kago",
+        items,
+        balance_after: null,
+      };
+    },
+    async findQuote(_b, quoteNo) {
+      const q = quotes.find((x) => x.quoteNo === quoteNo);
+      if (!q) return null;
+      const items = q.items.map((i) => ({ description: products.find((p) => p.id === i.productId)!.name, qty: i.qty, unitPrice: i.unitPrice, lineTotal: Math.round(i.qty * i.unitPrice) }));
+      const name = q.customerId ? customers.find((c) => c.id === q.customerId)!.name : q.customerName;
+      return { id: q.id, quoteNo: q.quoteNo, status: q.status, total: items.reduce((t, i) => t + i.lineTotal, 0), validUntil: q.validUntil, customerId: q.customerId, customerName: name, items };
+    },
+    async convertQuote({ quoteId, userId, method }) {
+      const q = quotes.find((x) => x.id === quoteId)!;
+      if (q.status !== "open") throw new Error(`quotation ${q.quoteNo} is ${q.status}`);
+      q.status = "accepted";
+      return repo.createSale({ businessId: "b1", userId, customerId: q.customerId, method, items: q.items });
+    },
     async salesSummary() {
       return { count: 12, revenue: 1840000, vat: 225965, grossProfit: 312000, creditSales: 250000 };
     },
@@ -246,5 +290,5 @@ export function fakeShop(opts: { ai?: LlmProvider | null; now?: Date } = {}) {
   const last = () => sent.at(-1)!.msg;
   const advance = (minutes: number) => (clock = new Date(clock.getTime() + minutes * 60_000));
 
-  return { repo, sent, files, say, tap, pick, last, lastText, textOf, conversations, customers, products, pending, sales, payments, stockIns, createdCustomers, advance };
+  return { repo, sent, files, say, tap, pick, last, lastText, textOf, conversations, customers, products, pending, sales, payments, stockIns, createdCustomers, quotes, advance };
 }

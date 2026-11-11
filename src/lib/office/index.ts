@@ -20,6 +20,7 @@ const NULL_FIELDS = {
   amount: null,
   supplier: null,
   period: null,
+  quote_no: null,
   question: null,
   reply: null,
   language: "en",
@@ -37,6 +38,10 @@ export function parseCommand(text: string): Interpretation {
   if (price) return { ...NULL_FIELDS, intent: "check_price", items: [{ product: price[1], qty: null, unit_price: null }] };
 
   if (/^(who owes( us)?|debtors|balances)$/.test(t)) return { ...NULL_FIELDS, intent: "customer_balance" };
+  const accepted = /^(?:quote\s*)?(qt-?\s*\d+)\s+accepted(?:[,\s]+(cash|card|credit|eft))?$/.exec(t);
+  if (accepted) {
+    return { ...NULL_FIELDS, intent: "accept_quote", quote_no: accepted[1], payment_method: (accepted[2] as Interpretation["payment_method"]) ?? null };
+  }
   const report = /^(sales|report|takings)(?: (today|yesterday|this week|this month))?$/.exec(t);
   if (report) {
     const period = (report[2] ?? "today").replace(" ", "_") as Interpretation["period"];
@@ -50,6 +55,7 @@ const HELP = (name: string, shop: string) =>
   "• _sold 20 cement and 5 rebar 12mm to Kabelo on credit_\n" +
   "• _Kabelo paid P500 orange money_\n" +
   "• _received 200 cement from Builders Depot at P78_\n" +
+  "• _quote Tlotlo 100 bricks and 10 cement_ / _QT-00012 accepted, cash_\n" +
   "• _how much rebar do we have?_ / _price of IBR sheets_\n" +
   "• _who owes us?_ / _sales today_ / _what sold best this month?_\n\n" +
   "I always show you a summary to *Confirm* before saving anything. Send */shop* to see your WhatsApp shop as a customer.";
@@ -128,6 +134,8 @@ export async function handleOffice(ctx: Context): Promise<void> {
     case "record_sale":
     case "record_payment":
     case "stock_in":
+    case "create_quote":
+    case "accept_quote":
       await startDraft(ctx, it);
       return;
 
@@ -140,12 +148,6 @@ export async function handleOffice(ctx: Context): Promise<void> {
       await answerPending(ctx, payload, expired, it.intent === "confirm");
       return;
 
-    case "create_quote":
-      await ctx.reply({
-        type: "text",
-        text: `📝 I understood a quotation${it.customer ? ` for *${it.customer}*` : ""}. Creating quotations on WhatsApp is coming in the next update.`,
-      });
-      return;
 
     case "check_stock":
       await answerStockOrPrice(ctx, "stock", it.items.map((i) => i.product));

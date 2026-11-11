@@ -1,8 +1,11 @@
 import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { formatPula } from "@/lib/money";
 
-/** Shape returned by the `invoice_data(sale_id)` database function. */
+/** Shape returned by the `invoice_data(sale_id)` and `quote_data(quote_id)` database functions. */
 export interface InvoiceData {
+  /** "quote" draws a quotation (no payment, a validity date); default is an invoice. */
+  kind?: "invoice" | "quote";
+  valid_until?: string;
   business: {
     name: string;
     trading_name: string | null;
@@ -17,7 +20,7 @@ export interface InvoiceData {
   sale: {
     invoice_no: string;
     created_at: string;
-    payment_method: string;
+    payment_method: string | null;
     subtotal_excl: number;
     vat_amount: number;
     total: number;
@@ -71,7 +74,12 @@ function qty(n: number) {
 
 export function InvoiceDocument({ data }: { data: InvoiceData }) {
   const { business: b, sale, customer, items } = data;
-  const isTaxInvoice = b.vat_registered;
+  const isQuote = data.kind === "quote";
+  const isTaxInvoice = b.vat_registered && !isQuote;
+  const title = isQuote ? "QUOTATION" : isTaxInvoice ? "TAX INVOICE" : "INVOICE";
+  const validUntil = data.valid_until
+    ? new Date(`${data.valid_until}T12:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+    : null;
   const date = new Date(sale.created_at).toLocaleString("en-GB", {
     timeZone: "Africa/Gaborone",
     day: "2-digit",
@@ -82,9 +90,9 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
   });
 
   return (
-    <Document title={`${sale.invoice_no} ${b.name}`} author="Morekisi">
+    <Document title={`${sale.invoice_no} ${b.name}`} author="Morekisi" subject={title}>
       <Page size="A4" style={s.page}>
-        {sale.status === "void" && <Text style={s.void}>VOID</Text>}
+        {(sale.status === "void" || sale.status === "expired") && <Text style={s.void}>{sale.status.toUpperCase()}</Text>}
 
         <View style={s.header}>
           <View>
@@ -92,10 +100,10 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
             {b.trading_name && <Text style={s.muted}>{b.trading_name}</Text>}
             {b.address && <Text style={s.muted}>{b.address}</Text>}
             {(b.phone || b.email) && <Text style={s.muted}>{[b.phone, b.email].filter(Boolean).join(" · ")}</Text>}
-            {isTaxInvoice && b.vat_number && <Text style={s.muted}>VAT No: {b.vat_number}</Text>}
+            {b.vat_registered && b.vat_number && <Text style={s.muted}>VAT No: {b.vat_number}</Text>}
           </View>
           <View>
-            <Text style={s.title}>{isTaxInvoice ? "TAX INVOICE" : "INVOICE"}</Text>
+            <Text style={s.title}>{title}</Text>
             <Text style={{ textAlign: "right", fontFamily: "Helvetica-Bold", fontSize: 12 }}>{sale.invoice_no}</Text>
             <Text style={[s.muted, { textAlign: "right" }]}>{date}</Text>
           </View>
@@ -103,15 +111,22 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
 
         <View style={s.row}>
           <View style={s.box}>
-            <Text style={s.label}>Bill to</Text>
-            <Text>{customer ? customer.name : "Cash customer"}</Text>
+            <Text style={s.label}>{isQuote ? "Prepared for" : "Bill to"}</Text>
+            <Text>{customer ? customer.name : isQuote ? "—" : "Cash customer"}</Text>
             {customer?.company && <Text style={s.muted}>{customer.company}</Text>}
             {customer?.phone && <Text style={s.muted}>{customer.phone}</Text>}
           </View>
-          <View style={s.box}>
-            <Text style={s.label}>Payment</Text>
-            <Text>{PAYMENT_LABEL[sale.payment_method] ?? sale.payment_method}</Text>
-          </View>
+          {isQuote ? (
+            <View style={s.box}>
+              <Text style={s.label}>Valid until</Text>
+              <Text>{validUntil ?? "—"}</Text>
+            </View>
+          ) : (
+            <View style={s.box}>
+              <Text style={s.label}>Payment</Text>
+              <Text>{sale.payment_method ? (PAYMENT_LABEL[sale.payment_method] ?? sale.payment_method) : "—"}</Text>
+            </View>
+          )}
           <View style={s.box}>
             <Text style={s.label}>Served by</Text>
             <Text>{data.served_by ?? "—"}</Text>
@@ -136,7 +151,7 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
         </View>
 
         <View style={s.totals}>
-          {isTaxInvoice && (
+          {b.vat_registered && (
             <>
               <View style={s.totalRow}>
                 <Text style={s.muted}>Subtotal (excl. VAT)</Text>
@@ -161,8 +176,13 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
         </View>
 
         <View style={s.footer} fixed>
+          {isQuote && validUntil && (
+            <Text style={{ marginBottom: 4, color: "#374151" }}>
+              Prices are valid until {validUntil}, subject to stock availability. Prices include VAT where applicable.
+            </Text>
+          )}
           {b.invoice_footer && <Text style={{ marginBottom: 4, color: "#374151" }}>{b.invoice_footer}</Text>}
-          <Text>Thank you for your business. · Generated by Morekisi</Text>
+          <Text>{isQuote ? "Thank you for the opportunity to quote." : "Thank you for your business."} · Generated by Morekisi</Text>
         </View>
       </Page>
     </Document>
