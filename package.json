@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:db": "scripts/test-db.sh",
     "typecheck": "tsc --noEmit",
-    "eval:ai": "tsx --tsconfig tsconfig.json scripts/ai-eval.ts"
+    "eval:ai": "tsx --tsconfig tsconfig.json scripts/ai-eval.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",

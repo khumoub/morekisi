@@ -28,7 +28,38 @@ The first market is hardware shops and small wholesalers in Botswana. See [`SPEC
 | ✅ **Reports and questions**: "sales today", "who owes us", "what sold best this month?". Answers come only from real data; staff never see profit | `src/lib/office/answers.ts` |
 | ⏭️ Next: quotations on WhatsApp, customer accounts and statements | week 4 |
 
-## Getting started
+## Run it locally with Docker (recommended)
+
+You only need [Docker Desktop](https://www.docker.com/products/docker-desktop/) (running) and [Git](https://git-scm.com).
+
+```bash
+git clone https://github.com/khumoub/morekisi.git
+cd morekisi
+docker compose up
+```
+
+The first start takes a few minutes (it downloads images and installs packages). When the log shows `Ready`, open **http://localhost:3000/login** and sign in:
+
+| Phone | Who | Code |
+|---|---|---|
+| 71 234 567 | Neo Molefe, owner of *Demo Hardware* | 123456 |
+| 71 234 568 | Kago Sello, staff | 123456 |
+| 71 234 569 | not in any shop (try creating your own) | 123456 |
+
+What runs: a minimal Supabase (Postgres, sign-in, database API) behind one gateway at `http://localhost:8000`, a one-off job that applies `supabase/migrations` and loads the demo shop (`supabase/seed.sql`), and the app with live reload: edit a file and the page updates.
+
+```bash
+docker compose down        # stop (your data is kept)
+docker compose down -v     # stop and wipe local data (the demo shop is recreated next start)
+docker compose logs -f app # app logs
+```
+
+- **AI and other settings:** create `.env.local` (copy `.env.example`); it's passed to the app. Restart with `docker compose up -d app`.
+- **Database tools:** Postgres is on `localhost:54322` (user `postgres`, password in `docker/local.env`).
+- `docker/local.env` holds **local-only** keys. They are not secrets; never use them for a real project.
+- The WhatsApp bot needs Meta to reach your computer over the internet (e.g. via `ngrok http 3000`) and a Meta app. Without that, run the bot test against the local stack: `npm run test:integration`.
+
+## Deploying (Supabase cloud + Vercel)
 
 ```bash
 npm install
@@ -48,6 +79,7 @@ npm run dev
 npm test            # unit + engine tests (no database needed)
 npm run test:db     # all migrations + end-to-end business flows on a throwaway Postgres 16
 npm run typecheck
+npm run test:integration  # WhatsApp → engine → local Supabase (needs `docker compose up -d`)
 npm run eval:ai     # how well the real AI understands ~40 real-style shop messages (calls the model; costs a few cents)
 ```
 
