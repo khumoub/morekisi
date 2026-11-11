@@ -21,7 +21,7 @@ The first market is hardware shops and small wholesalers in Botswana. See [`SPEC
 | ✅ **Settings**: shop details, VAT and invoice footer, welcome message, order approval, delivery areas and fees, owner controls | `src/app/app/settings` |
 | ✅ **Staff**: add by phone with a role, change roles, remove access (can't remove yourself or the last owner) | `src/app/app/settings/staff` |
 | ✅ **WhatsApp connection** per shop; access tokens stored encrypted in Supabase Vault | `src/app/app/settings/whatsapp` |
-| ✅ **AI understands staff messages** in everyday English and Setswana (sales, payments, stock in, stock/price checks, balances, reports, open questions, yes/no). Works with Claude or OpenAI; keyword fallback if the AI is off or down | `src/lib/ai` |
+| ✅ **AI understands staff messages** in everyday English and Setswana (sales, payments, stock in, stock/price checks, balances, reports, open questions, yes/no). Works with Claude, OpenAI or DeepSeek; keyword fallback if the AI is off or down | `src/lib/ai` |
 | ✅ **Sales on WhatsApp**: products and customers matched against the shop's data, asks "which one?" when unsure, summary with **Confirm / Cancel**, stock and credit-limit warnings, discount limit for staff | `src/lib/office` |
 | ✅ **Invoice PDFs** (tax invoice with VAT breakdown) sent straight back in the chat | `src/lib/pdf` |
 | ✅ **Payments and stock in** on WhatsApp with confirmation; receipts numbered RCPT-… | `src/lib/office/flows.ts` |
