@@ -65,7 +65,7 @@ export async function handleInbound(deps: EngineDeps, message: InboundMessage): 
         business.id,
         conversation.id,
         message.from,
-        { type: "document", link: "", filename: file.filename, caption },
+        { type: "document", link: result.url ?? "", filename: file.filename, caption },
         result.messageId,
       );
     },

@@ -62,6 +62,7 @@ select pg_temp.eq(import_products(:'biz', '[
   {"sku":"","name":"rebar y12 6M","sell_price":12000,"stock":40}
 ]'::jsonb), '{"created": 0, "updated": 2}'::jsonb, 're-import updates');
 select pg_temp.eq((select sell_price from products where sku = 'CEM425'), 9900::bigint, 'price updated');
+select pg_temp.eq((select unit from products where sku = 'CEM425'), 'bag', 're-import without a unit keeps the unit');
 select pg_temp.eq((select on_hand from product_stock where name = 'Cement 42.5N 50kg'), 100::numeric, 'stock adjusted to count');
 select pg_temp.eq((select count(*) from stock_movements where reason = 'CSV import' and type = 'adjustment'),
                   1::bigint, 'only one adjustment (rebar count unchanged)');

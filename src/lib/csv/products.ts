@@ -143,7 +143,7 @@ export function parseProductCsv(text: string): ParsedImport {
       sku,
       name,
       category: get(r, "category"),
-      unit: get(r, "unit").toLowerCase() || "each",
+      unit: get(r, "unit").toLowerCase(), // "" = keep the existing unit (new products get "each")
       sell_price: price,
       cost_price: cost,
       reorder_level: reorder,
@@ -164,9 +164,9 @@ export function toImportPayload(rows: ImportRow[]) {
       sku: r.sku,
       name: r.name,
       category: r.category,
-      unit: r.unit,
       sell_price: r.sell_price,
     };
+    if (r.unit) out.unit = r.unit;
     if (r.cost_price !== null) out.cost_price = r.cost_price;
     if (r.reorder_level !== null) out.reorder_level = r.reorder_level;
     if (r.stock !== null) out.stock = r.stock;

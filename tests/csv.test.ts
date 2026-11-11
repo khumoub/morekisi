@@ -26,7 +26,7 @@ describe("product CSV import", () => {
     expect(r.errors).toEqual([]);
     expect(r.columns).toMatchObject({ sku: "Item Code", name: "Item Description", sell_price: "Retail", stock: "SOH" });
     expect(r.ignoredColumns).toEqual(["Supplier"]);
-    expect(r.rows[0]).toMatchObject({ sell_price: 650, cost_price: 480, stock: 1200, unit: "each" });
+    expect(r.rows[0]).toMatchObject({ sell_price: 650, cost_price: 480, stock: 1200, unit: "" });
   });
 
   it("reports missing required columns", () => {
@@ -59,6 +59,6 @@ describe("product CSV import", () => {
 
   it("leaves out empty optional values so the database keeps what it has", () => {
     const [row] = toImportPayload(parseProductCsv("name,price\nSand,250\n").rows);
-    expect(row).toEqual({ sku: "", name: "Sand", category: "", unit: "each", sell_price: 25000 });
+    expect(row).toEqual({ sku: "", name: "Sand", category: "", sell_price: 25000 });
   });
 });

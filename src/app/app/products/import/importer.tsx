@@ -147,7 +147,7 @@ export function Importer() {
                       <td className="py-2 pr-3 text-neutral-500">{r.sku || "—"}</td>
                       <td className="py-2 pr-3 text-neutral-500">{r.category || "—"}</td>
                       <td className="py-2 pr-3 text-right tabular-nums">
-                        {formatPula(r.sell_price)}/{r.unit}
+                        {formatPula(r.sell_price)}{r.unit && `/${r.unit}`}
                       </td>
                       <td className="py-2 pr-3 text-right tabular-nums text-neutral-500">
                         {r.cost_price === null ? "—" : formatPula(r.cost_price)}

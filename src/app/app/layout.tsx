@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { getSession, hasRole } from "@/lib/auth/session";
+import { simulatorEnabled } from "@/lib/simulator";
 import { signOut, switchBusiness } from "./actions";
 
 const nav = [
@@ -10,6 +11,8 @@ const nav = [
   { href: "/app/settings/staff", label: "Staff", minRole: "owner" },
   { href: "/app/settings/whatsapp", label: "WhatsApp", minRole: "owner" },
 ] as const;
+
+const simulatorLink = { href: "/app/simulator", label: "💬 Chat simulator", minRole: "staff" } as const;
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
@@ -52,7 +55,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           </div>
         </div>
         <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4">
-          {nav
+          {[...nav, ...(simulatorEnabled() ? [simulatorLink] : [])]
             .filter((n) => hasRole(current.role, n.minRole))
             .map((n) => (
               <Link

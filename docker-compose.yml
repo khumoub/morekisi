@@ -136,6 +136,7 @@ services:
       WHATSAPP_APP_SECRET: local-app-secret
       WATCHPACK_POLLING: "true" # reliable live reload on Docker Desktop (Mac/Windows)
       NEXT_TELEMETRY_DISABLED: "1"
+      MOREKISI_SIMULATOR: "true" # dashboard → Chat simulator (local only)
     command:
       - sh
       - -c

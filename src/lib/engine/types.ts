@@ -190,7 +190,8 @@ export interface OutboundFile {
 /** Sends WhatsApp messages from the shop's number. */
 export interface Messenger {
   send(to: string, msg: OutboundMessage): Promise<{ ok: boolean; messageId?: string }>;
-  sendFile(to: string, file: OutboundFile, caption?: string): Promise<{ ok: boolean; messageId?: string }>;
+  /** `url`, when returned, is stored with the logged message (the chat simulator returns a data: URL). */
+  sendFile(to: string, file: OutboundFile, caption?: string): Promise<{ ok: boolean; messageId?: string; url?: string }>;
 }
 
 export interface Context {
