@@ -27,7 +27,8 @@ services:
       - db-data:/var/lib/postgresql/data
       - ./docker/db/99-morekisi.sql:/docker-entrypoint-initdb.d/init-scripts/99-morekisi.sql:ro
     ports:
-      - "54322:5432" # for database tools (user postgres, password in docker/local.env)
+      # For database tools (user postgres, password in docker/local.env). Change with MOREKISI_DB_PORT.
+      - "${MOREKISI_DB_PORT:-54329}:5432"
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
       interval: 5s

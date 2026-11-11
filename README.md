@@ -54,8 +54,9 @@ docker compose down -v     # stop and wipe local data (the demo shop is recreate
 docker compose logs -f app # app logs
 ```
 
+- **"port is already allocated"**: something else on your computer uses that port. Morekisi needs **3000** (app) and **8000** (local Supabase); the database port (default **54329**) can be changed, e.g. `MOREKISI_DB_PORT=54400 docker compose up` (PowerShell: `$env:MOREKISI_DB_PORT=54400; docker compose up`). If you also use the Supabase CLI, stop it first with `npx supabase stop`.
 - **AI and other settings:** create `.env.local` (copy `.env.example`); it's passed to the app. Restart with `docker compose up -d app`.
-- **Database tools:** Postgres is on `localhost:54322` (user `postgres`, password in `docker/local.env`).
+- **Database tools:** Postgres is on `localhost:54329` (user `postgres`, password in `docker/local.env`).
 - `docker/local.env` holds **local-only** keys. They are not secrets; never use them for a real project.
 - The WhatsApp bot needs Meta to reach your computer over the internet (e.g. via `ngrok http 3000`) and a Meta app. Without that, run the bot test against the local stack: `npm run test:integration`.
 
