@@ -1,0 +1,9 @@
+# Keep Unix line endings everywhere, including Windows checkouts:
+# the Docker setup (shell script, env file, SQL, nginx config) runs inside Linux containers,
+# where Windows line endings (CRLF) break scripts and add hidden characters to settings.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary
